@@ -5,6 +5,7 @@ import "forge-std/Test.sol";
 import { UUPSProxy } from "../src/UUPSProxy.sol";
 import { ClockUUPS } from "../src/UUPSLogic/ClockUUPS.sol";
 import { ClockUUPSV2 } from "../src/UUPSLogic/ClockUUPSV2.sol";
+import { ClockUUPSV3 } from "../src/UUPSLogic/ClockUUPSV3.sol";
 
 contract UUPSTest is Test {
   
@@ -40,21 +41,37 @@ contract UUPSTest is Test {
     vm.prank(admin);
     ClockUUPS ups = ClockUUPS(address(uupsProxy));
     ups.upgradeTo(address(clockV2));
-    ups.setAlarm1(12345);
-    assertEq(ups.alarm1(),12345);
+    ClockUUPSV2 upsV2 = ClockUUPSV2(address(uupsProxy));
+    upsV2.setAlarm1(12345);
+    assertEq(upsV2.alarm1(),12345);
     vm.stopPrank();
   }
 
   function testCantUpgrade() public {
     // check upgradeTo should fail if implementation doesn't inherit Proxiable
-
-    // ans: I know the CloukUUPSV2 doesn't inherit Proxiable that I can't
-    // call upgradeTo function to update the slot but...I don't know how to test it....
+    vm.prank(admin);
+    ClockUUPS ups = ClockUUPS(address(uupsProxy));
+    ups.upgradeTo(address(clockV2));
+    ClockUUPSV2 upsV2 = ClockUUPSV2(address(uupsProxy));
+    //v2 doesn't inherit Proxiable so that the success status is false.
+    (bool success, ) = address(upsV2).call(abi.encodeWithSignature("proxiableUUID()"));
+    vm.stopPrank();
+    assertEq(success, false);
   }
   
   function testCantUpgradeIfLogicDoesntHaveUpgradeFunction() public {
     // check upgradeTo should fail if implementation doesn't implement upgradeTo
-    // same as last test
+    vm.prank(admin);
+    ClockUUPSV3 clockV3 = new ClockUUPSV3();
+    uupsProxy = new UUPSProxy(abi.encodeWithSignature("setAlarm1(uint256)", 1234),address(clockV3));
+    ClockUUPSV3 upsV3 = ClockUUPSV3(address(uupsProxy));
+    (bool proxiable, ) = address(upsV3).call(abi.encodeWithSignature("proxiableUUID()"));
+    (bool upgradeTo, ) = address(upsV3).call(abi.encodeWithSignature("upgradeTo()"));
+    vm.stopPrank();
+    //the V3 contract inherit the Proxiable so the proxiable will be true.
+    //but it doesn't implement upgrade function do upgradeTo will be false.
+    assertEq(proxiable, true);
+    assertEq(upgradeTo, false);
   }
 
 }
